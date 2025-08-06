@@ -2,21 +2,28 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const mysql = require("mysql2");
+const http = require("http");
+const { Server } = require("socket.io");
 
 const app = express();
+const server = http.createServer(app); // Necesario para Socket.IO
 
-// 🔹 CORS configurado para tu dominio y abierto para pruebas
-app.use(cors({
-  origin: ["https://4shc.co", "https://4shc.co/rifa-camilo", "http://localhost:5173"],
-  methods: ["GET", "POST", "DELETE"],
-  allowedHeaders: ["Content-Type"]
-}));
+// Configuración de CORS
+const allowedOrigins = [
+  "https://4shc.co",
+  "https://4shc.co/rifa-camilo",
+  "http://localhost:5173"
+];
 
-// 🔹 Middleware para JSON y formularios
-app.use(express.json({ limit: "1mb" })); 
+const io = new Server(server, {
+  cors: { origin: allowedOrigins }
+});
+
+app.use(cors({ origin: allowedOrigins }));
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// Crear el pool
+// Conexión MySQL con Pool
 const db = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -27,11 +34,10 @@ const db = mysql.createPool({
   queueLimit: 0
 });
 
-// Probar la conexión
+// Probar conexión
 db.getConnection((err, connection) => {
-  if (err) {
-    console.error("❌ Error conectando a MySQL:", err);
-  } else {
+  if (err) console.error("❌ Error conectando a MySQL:", err);
+  else {
     console.log("✅ Conectado a MySQL");
     connection.release();
   }
@@ -45,24 +51,20 @@ app.get("/boletas", (req, res) => {
   });
 });
 
-// 📌 Guardar o actualizar boleta con verificación
+// 📌 Guardar/actualizar boleta con bloqueo
 app.post("/boletas", (req, res) => {
   const { numero, cliente, celular, pago, montoAbono, vendedor } = req.body;
+  if (!numero) return res.status(400).json({ error: "Número de boleta requerido" });
 
-  if (!numero) {
-    return res.status(400).json({ error: "Número de boleta requerido" });
-  }
-
-  // 1️⃣ Verificar si ya está vendida
+  // Verificar si ya está vendida
   db.query("SELECT cliente, pago FROM boletas WHERE numero = ?", [numero], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
 
     if (rows.length > 0 && rows[0].cliente && rows[0].pago === "Pagado") {
-      // Ya está vendida → No permitir sobreescribir
       return res.status(409).json({ error: "Esta boleta ya fue vendida por otro usuario" });
     }
 
-    // 2️⃣ Guardar o actualizar
+    // Guardar o actualizar
     const sql = `
       INSERT INTO boletas (numero, cliente, celular, pago, montoAbono, vendedor)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -76,6 +78,10 @@ app.post("/boletas", (req, res) => {
 
     db.query(sql, [numero, cliente, celular, pago, montoAbono, vendedor], (err) => {
       if (err) return res.status(500).json({ error: err.message });
+
+      // 🔹 Emitir evento a todos los clientes conectados
+      io.emit("boletaActualizada", { numero, cliente, celular, pago, montoAbono, vendedor });
+
       res.json({ success: true });
     });
   });
@@ -85,12 +91,25 @@ app.post("/boletas", (req, res) => {
 app.delete("/boletas/:numero", (req, res) => {
   db.query("DELETE FROM boletas WHERE numero = ?", [req.params.numero], (err) => {
     if (err) return res.status(500).json({ error: err.message });
+
+    // 🔹 Notificar a todos que se eliminó
+    io.emit("boletaEliminada", req.params.numero);
+
     res.json({ success: true });
   });
 });
 
-// Servidor
+// Socket.IO conexión
+io.on("connection", (socket) => {
+  console.log("🔌 Usuario conectado:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("❌ Usuario desconectado:", socket.id);
+  });
+});
+
+// Iniciar servidor
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Servidor backend corriendo en puerto ${PORT}`);
 });
