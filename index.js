@@ -16,23 +16,25 @@ app.use(cors({
 app.use(express.json({ limit: "1mb" })); 
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ Usar pool para conexiones estables
+// Crear el pool
 const db = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   waitForConnections: true,
-  connectionLimit: 10, // hasta 10 conexiones simultáneas
+  connectionLimit: 10,
   queueLimit: 0
 });
 
-db.connect((err) => {
+// Probar la conexión
+db.getConnection((err, connection) => {
   if (err) {
     console.error("❌ Error conectando a MySQL:", err);
-    return;
+  } else {
+    console.log("✅ Conectado a MySQL");
+    connection.release(); // liberar conexión
   }
-  console.log("✅ Conectado a MySQL");
 });
 
 // 📌 Obtener boletas
