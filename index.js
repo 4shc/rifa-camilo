@@ -33,63 +33,58 @@ db.getConnection((err, connection) => {
     console.error("❌ Error conectando a MySQL:", err);
   } else {
     console.log("✅ Conectado a MySQL");
-    connection.release(); // liberar conexión
+    connection.release();
   }
 });
 
 // 📌 Obtener boletas
 app.get("/boletas", (req, res) => {
-  console.log("📌 Petición recibida en /boletas");
-
   db.query("SELECT * FROM boletas", (err, results) => {
-    if (err) {
-      console.error("❌ Error en consulta MySQL:", err);
-      return res.status(500).json({ error: err.message });
-    }
-    console.log("✅ Resultados enviados:", results.length);
+    if (err) return res.status(500).json({ error: err.message });
     res.json(results);
   });
 });
 
-// 📌 Guardar o actualizar boleta
+// 📌 Guardar o actualizar boleta con verificación
 app.post("/boletas", (req, res) => {
-  console.log("📌 Datos recibidos en POST /boletas:", req.body);
-
   const { numero, cliente, celular, pago, montoAbono, vendedor } = req.body;
 
   if (!numero) {
     return res.status(400).json({ error: "Número de boleta requerido" });
   }
 
-  const sql = `
-    INSERT INTO boletas (numero, cliente, celular, pago, montoAbono, vendedor)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-    cliente = VALUES(cliente),
-    celular = VALUES(celular),
-    pago = VALUES(pago),
-    montoAbono = VALUES(montoAbono),
-    vendedor = VALUES(vendedor)
-  `;
+  // 1️⃣ Verificar si ya está vendida
+  db.query("SELECT cliente, pago FROM boletas WHERE numero = ?", [numero], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
 
-  db.query(sql, [numero, cliente, celular, pago, montoAbono, vendedor], (err) => {
-    if (err) {
-      console.error("❌ Error guardando boleta:", err);
-      return res.status(500).json({ error: err.message });
+    if (rows.length > 0 && rows[0].cliente && rows[0].pago === "Pagado") {
+      // Ya está vendida → No permitir sobreescribir
+      return res.status(409).json({ error: "Esta boleta ya fue vendida por otro usuario" });
     }
-    res.json({ success: true });
+
+    // 2️⃣ Guardar o actualizar
+    const sql = `
+      INSERT INTO boletas (numero, cliente, celular, pago, montoAbono, vendedor)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+      cliente = VALUES(cliente),
+      celular = VALUES(celular),
+      pago = VALUES(pago),
+      montoAbono = VALUES(montoAbono),
+      vendedor = VALUES(vendedor)
+    `;
+
+    db.query(sql, [numero, cliente, celular, pago, montoAbono, vendedor], (err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true });
+    });
   });
 });
 
 // 📌 Eliminar boleta
 app.delete("/boletas/:numero", (req, res) => {
-  console.log(`📌 Eliminando boleta ${req.params.numero}`);
-
   db.query("DELETE FROM boletas WHERE numero = ?", [req.params.numero], (err) => {
-    if (err) {
-      console.error("❌ Error eliminando boleta:", err);
-      return res.status(500).json({ error: err.message });
-    }
+    if (err) return res.status(500).json({ error: err.message });
     res.json({ success: true });
   });
 });
