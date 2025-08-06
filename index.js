@@ -77,11 +77,6 @@ app.listen(PORT, () => {
 
 
 
-
-
-
-
-
 // Preparando para render. el codigo anterior funcina para localhost
 require("dotenv").config(); // Para usar variables de entorno
 
@@ -111,8 +106,12 @@ db.connect((err) => {
 
 // Obtener boletas
 app.get("/boletas", (req, res) => {
+  console.log("📌 Petición recibida en /boletas");
   db.query("SELECT * FROM boletas", (err, results) => {
-    if (err) return res.status(500).json({ error: err });
+    if (err) {
+      console.error("❌ Error en consulta MySQL:", err);
+      return res.status(500).json({ error: err.message });
+    }
     res.json(results);
   });
 });
