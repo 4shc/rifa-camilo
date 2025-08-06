@@ -1,92 +1,20 @@
-/* 
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const mysql = require("mysql2");
 
 const app = express();
-app.use(cors());
-app.use(express.json());
 
-// Configura tu conexión a MySQL
-const db = mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "", // vacía por defecto en XAMPP
-  database: "rifa"
-});
+// 🔹 CORS configurado para tu dominio y abierto para pruebas
+app.use(cors({
+  origin: ["https://4shc.co", "https://4shc.co/rifa-camilo", "http://localhost:5173"],
+  methods: ["GET", "POST", "DELETE"],
+  allowedHeaders: ["Content-Type"]
+}));
 
-// Probar conexión
-db.connect((err) => {
-  if (err) {
-    console.error("Error conectando a MySQL:", err);
-    return;
-  }
-  console.log("✅ Conectado a MySQL");
-});
-
-// Obtener todas las boletas
-app.get("/boletas", (req, res) => {
-  db.query("SELECT * FROM boletas", (err, results) => {
-    if (err) {
-      return res.status(500).json({ error: err });
-    }
-    res.json(results);
-  });
-});
-
-// Guardar o actualizar una boleta
-app.post("/boletas", (req, res) => {
-  const { numero, cliente, celular, pago, montoAbono, vendedor } = req.body;
-
-  const sql = `
-    INSERT INTO boletas (numero, cliente, celular, pago, montoAbono, vendedor)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-    cliente = VALUES(cliente),
-    celular = VALUES(celular),
-    pago = VALUES(pago),
-    montoAbono = VALUES(montoAbono),
-    vendedor = VALUES(vendedor)
-  `;
-
-  db.query(sql, [numero, cliente, celular, pago, montoAbono, vendedor], (err, result) => {
-    if (err) {
-      return res.status(500).json({ error: err });
-    }
-    res.json({ success: true });
-  });
-});
-
-// Eliminar boleta
-app.delete("/boletas/:numero", (req, res) => {
-  const { numero } = req.params;
-  db.query("DELETE FROM boletas WHERE numero = ?", [numero], (err) => {
-    if (err) return res.status(500).json({ error: err });
-    res.json({ success: true });
-  });
-});
-
-
-// Iniciar servidor
-const PORT = 3001;
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor backend corriendo en http://localhost:${PORT}`);
-});
- */
-
-
-
-
-// Preparando para render. el codigo anterior funcina para localhost
-require("dotenv").config(); // Para usar variables de entorno
-
-const express = require("express");
-const cors = require("cors");
-const mysql = require("mysql2");
-
-const app = express();
-app.use(cors());
-app.use(express.json());
+// 🔹 Middleware para JSON y formularios
+app.use(express.json({ limit: "1mb" })); 
+app.use(express.urlencoded({ extended: true }));
 
 // Conexión MySQL usando variables de entorno
 const db = mysql.createConnection({
@@ -104,7 +32,7 @@ db.connect((err) => {
   console.log("✅ Conectado a MySQL");
 });
 
-// Obtener boletas
+// 📌 Obtener boletas
 app.get("/boletas", (req, res) => {
   console.log("📌 Petición recibida en /boletas");
 
@@ -113,16 +41,20 @@ app.get("/boletas", (req, res) => {
       console.error("❌ Error en consulta MySQL:", err);
       return res.status(500).json({ error: err.message });
     }
-
-    console.log("✅ Resultados de boletas:", results.length);
+    console.log("✅ Resultados enviados:", results.length);
     res.json(results);
   });
 });
 
-
-// Guardar o actualizar boleta
+// 📌 Guardar o actualizar boleta
 app.post("/boletas", (req, res) => {
+  console.log("📌 Datos recibidos en POST /boletas:", req.body);
+
   const { numero, cliente, celular, pago, montoAbono, vendedor } = req.body;
+
+  if (!numero) {
+    return res.status(400).json({ error: "Número de boleta requerido" });
+  }
 
   const sql = `
     INSERT INTO boletas (numero, cliente, celular, pago, montoAbono, vendedor)
@@ -136,15 +68,23 @@ app.post("/boletas", (req, res) => {
   `;
 
   db.query(sql, [numero, cliente, celular, pago, montoAbono, vendedor], (err) => {
-    if (err) return res.status(500).json({ error: err });
+    if (err) {
+      console.error("❌ Error guardando boleta:", err);
+      return res.status(500).json({ error: err.message });
+    }
     res.json({ success: true });
   });
 });
 
-// Eliminar boleta
+// 📌 Eliminar boleta
 app.delete("/boletas/:numero", (req, res) => {
+  console.log(`📌 Eliminando boleta ${req.params.numero}`);
+
   db.query("DELETE FROM boletas WHERE numero = ?", [req.params.numero], (err) => {
-    if (err) return res.status(500).json({ error: err });
+    if (err) {
+      console.error("❌ Error eliminando boleta:", err);
+      return res.status(500).json({ error: err.message });
+    }
     res.json({ success: true });
   });
 });
@@ -152,5 +92,5 @@ app.delete("/boletas/:numero", (req, res) => {
 // Servidor
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor backend corriendo en http://localhost:${PORT}`);
+  console.log(`🚀 Servidor backend corriendo en puerto ${PORT}`);
 });
