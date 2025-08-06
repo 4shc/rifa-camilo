@@ -107,14 +107,18 @@ db.connect((err) => {
 // Obtener boletas
 app.get("/boletas", (req, res) => {
   console.log("📌 Petición recibida en /boletas");
+
   db.query("SELECT * FROM boletas", (err, results) => {
     if (err) {
       console.error("❌ Error en consulta MySQL:", err);
       return res.status(500).json({ error: err.message });
     }
+
+    console.log("✅ Resultados de boletas:", results.length);
     res.json(results);
   });
 });
+
 
 // Guardar o actualizar boleta
 app.post("/boletas", (req, res) => {
