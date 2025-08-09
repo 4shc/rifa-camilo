@@ -113,3 +113,15 @@ const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`🚀 Servidor backend corriendo en puerto ${PORT}`);
 });
+
+
+// Verificar código de autorización
+app.post("/verificar-codigo", (req, res) => {
+  console.log("Código recibido:", req.body.codigo);
+  console.log("Código esperado:", process.env.DELETE_CODE);
+
+  if (req.body.codigo?.trim() === process.env.DELETE_CODE.trim()) {
+    return res.json({ valido: true });
+  }
+  res.status(401).json({ valido: false, error: "Código incorrecto" });
+});
